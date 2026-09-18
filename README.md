@@ -1,26 +1,49 @@
-# Projeto Técnico de Eventos — Alpha 0.1
+# PrePro Eventos — Alpha 0.2
 
-Nova implementação independente para pré-produção técnica de eventos. O código foi iniciado do zero com uma arquitetura própria, separando interface, regras de negócio, catálogo, projetos e autenticação.
+Implementação independente para pré-produção técnica de eventos. O projeto foi iniciado do zero e não depende do banco, autenticação, nomenclaturas internas ou código do sistema usado apenas como referência funcional.
 
-## O que já existe
+## O que esta Alpha já cobre
 
-- login por Supabase Auth;
-- modo DEMO local separado do modo de produção;
-- papéis `admin`, `producer` e `viewer`;
-- projetos com local, endereço, salas, responsáveis e períodos completos;
-- validação cronológica de montagem e evento;
-- catálogo técnico central;
-- grupos de Áudio e Iluminação com classificação aéreo/solo;
-- múltiplos sistemas de LED;
-- consolidação de cargas;
-- estimativa elétrica de pré-produção;
-- prévia de Dossiê com identidade azul-marinho/hexagonal;
-- schema Supabase com RLS para impedir acesso indevido aos projetos;
-- workflow pronto para GitHub Pages.
+- autenticação via Supabase Auth em produção e modo DEMO isolado;
+- perfis `viewer`, `producer`, `management` e `admin`;
+- cadastro novo nasce `pending` e precisa de aprovação;
+- senha validada na interface com 8+ caracteres, maiúscula, minúscula e caractere especial;
+- projetos com montagem, evento e **fim da desmontagem/liberação dos equipamentos**;
+- validação cronológica das cinco datas/horários;
+- Áudio simplificado: mesa, equipamentos, posição, peso e consumo;
+- estruturas físicas compartilhadas por Som, Luz e Vídeo;
+- treliças Q15/Q20/Q25/Q30/Q50/outra, comprimento, origem, pontos, capacidade e talhas;
+- múltiplos painéis de LED com cálculo de placas, resolução, portas de rede, alimentações, jumps, cases e apoios;
+- catálogo técnico central com marca, modelo, peso, consumo, estoque e manutenção;
+- base antiga importada apenas como **semente PENDENTE**, nunca como dado homologado;
+- disponibilidade de estoque por sobreposição de datas;
+- bloqueio de reserva quando falta estoque controlado;
+- exceção de estoque para Gerência/Admin mediante justificativa e registro;
+- presença em tempo real em produção: quem está online, projeto e rota atual;
+- auditoria de alterações e indicação da última alteração no projeto;
+- estimativa elétrica consolidada;
+- Dossiê técnico imprimível;
+- Memorial Aéreo e Memorial de Solo em CSV para abrir no Excel;
+- schema Supabase com RLS e políticas por função;
+- workflow de GitHub Pages para o DEMO.
 
-> Os equipamentos incluídos no modo DEMO são apenas exemplos de interface. Não devem ser usados como referência técnica até serem substituídos por um catálogo homologado.
+> **Atenção técnica:** pesos lineares, fatores de segurança, regras de mãos francesas, limites de processamento e demais valores herdados como referência precisam ser homologados contra inventário/ficha técnica e revisados pelo profissional habilitado antes de uso como documentação legal.
 
-## Testar agora no computador
+## Modelo operacional
+
+### Visualizador
+Somente leitura dos projetos aos quais possui acesso.
+
+### Produtor
+Cria e edita projetos autorizados, sem administrar catálogo/usuários.
+
+### Gerência
+Pode operar projetos, aprovar Visualizadores/Produtores, administrar catálogo, estoque, manutenção e autorizar exceções de estoque com justificativa.
+
+### Admin
+Tudo da Gerência e permissões administrativas do sistema. **Acesso ao código-fonte não é concedido por este papel**; quem pode alterar código é definido separadamente no GitHub.
+
+## Testar no computador
 
 1. Instale Node.js 22 ou superior.
 2. Abra um terminal dentro desta pasta.
@@ -33,19 +56,19 @@ npm run dev:demo
 
 4. Abra o endereço mostrado pelo Vite, normalmente `http://localhost:5173`.
 
-O modo DEMO não exige login real e salva dados no navegador. Ele existe apenas para desenvolvimento e testes.
+O modo DEMO salva dados no navegador e entra como Admin de demonstração. Ele é apenas para UX/desenvolvimento.
 
 ## Produção segura com Supabase
 
-1. Crie um projeto **novo** no Supabase.
-2. Abra **SQL Editor** e execute `supabase/schema.sql`.
-3. Em Authentication, desabilite cadastro público se o sistema for interno.
-4. Crie/convide os usuários autorizados.
-5. Promova somente o primeiro administrador pelo SQL Editor conforme a instrução no final do `schema.sql`.
+1. Crie um projeto **novo e exclusivo** no Supabase.
+2. Execute `supabase/schema.sql` no SQL Editor.
+3. Importe `supabase/seed-legacy.sql` somente se quiser usar a base antiga como lista inicial não homologada.
+4. Em Authentication, mantenha cadastro por e-mail disponível para que o usuário possa solicitar acesso, habilite confirmação de e-mail e configure a política de senha mais restritiva disponível. Não habilite acesso anônimo.
+5. Crie sua primeira conta pelo formulário e, pelo SQL Editor, promova apenas o primeiro administrador conforme a instrução ao fim de `schema.sql`.
 6. Copie `.env.example` para `.env` e preencha:
 
 ```env
-VITE_APP_NAME="Projeto Técnico de Eventos"
+VITE_APP_NAME="PrePro Eventos"
 VITE_SUPABASE_URL="https://SEU-PROJETO.supabase.co"
 VITE_SUPABASE_ANON_KEY="SUA_CHAVE_ANON_PUBLICA"
 VITE_DEMO_MODE="false"
@@ -53,54 +76,50 @@ VITE_DEMO_MODE="false"
 
 7. Rode `npm run dev`.
 
-### Segurança importante
+### Segurança
 
-A chave `anon` do Supabase é pública por natureza e pode ficar no frontend. A segurança dos dados vem das políticas **RLS** incluídas no schema. **Nunca** coloque `service_role` no frontend, no GitHub ou em variáveis Vite.
+- `service_role` **nunca** vai para frontend, GitHub ou variável Vite.
+- esconder botão não é segurança: permissões críticas também são aplicadas por RLS/trigger no banco;
+- contas novas ficam `pending` e não recebem acesso operacional até aprovação;
+- Gerência não pode promover outra pessoa a Gerência/Admin;
+- exceções de estoque exigem papel de Gerência/Admin e justificativa;
+- para produção, recomenda-se MFA obrigatório para Gerência/Admin antes do lançamento definitivo.
 
-## Subir no GitHub Pages
+## GitHub Pages — DEMO
 
-Depois de criar o repositório:
-
-```bash
-git init
-git add .
-git commit -m "Alpha inicial"
-git branch -M main
-git remote add origin URL_DO_SEU_REPOSITORIO
-git push -u origin main
-```
+O arquivo `.github/workflows/deploy-pages.yml` publica automaticamente o modo DEMO ao fazer push na `main`.
 
 No GitHub:
 
-1. `Settings > Pages > Source`: escolha **GitHub Actions**.
-2. Em `Settings > Secrets and variables > Actions > Secrets`, crie:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-3. Em `Variables`, crie `VITE_APP_NAME` se quiser mudar o nome.
-4. Para um deploy **temporário de demonstração sem autenticação**, crie a variável `VITE_DEMO_MODE=true`. Remova-a/defina `false` assim que o Supabase estiver configurado.
-5. Faça um novo push ou rode o workflow manualmente em `Actions`.
+1. `Settings > Pages > Source` → **GitHub Actions**.
+2. Faça o push da atualização.
+3. Acompanhe em `Actions > Deploy GitHub Pages`.
 
-## Estrutura
+O workflow atual define `VITE_DEMO_MODE=true` deliberadamente. Antes de produção com usuários reais, troque o workflow para usar o Supabase e secrets do repositório.
+
+## Estrutura do projeto
 
 ```text
 src/
   components/       interface compartilhada
-  contexts/         autenticação e estado da aplicação
-  data/             camada de persistência (demo e Supabase)
+  contexts/         autenticação, dados e presença
+  data/             persistência DEMO/Supabase + semente
   pages/            telas do produto
   types/            modelo de domínio
-  utils/            cálculos e validações
+  utils/            cálculos, datas, senha e exportação
 supabase/
-  schema.sql         tabelas, funções e RLS
+  schema.sql         banco, RLS, estoque, auditoria e autorização
+  seed-legacy.sql    base antiga importada como PENDENTE / estoque 0
 .github/workflows/
-  deploy-pages.yml   publicação automática
+  deploy-pages.yml   publicação automática do DEMO
 ```
 
-## Próximas etapas recomendadas
+## Próximas etapas
 
-1. homologar o catálogo técnico real;
-2. adicionar membros aos projetos pela interface;
-3. histórico/auditoria de alterações;
-4. memoriais aéreo e solo com regras revisadas pelo engenheiro;
-5. geração do Dossiê final com cronograma, equipe, imagens e logística;
-6. versionamento de projetos e aprovação técnica.
+1. homologar o inventário real da empresa e remover itens irrelevantes da semente;
+2. criar interface de membros/permissão por projeto;
+3. transformar manutenção agregada em histórico por unidade/serial quando necessário;
+4. revisar com engenharia as regras dos memoriais e fatores de segurança;
+5. evoluir o Dossiê para cronograma, equipe, renders, logística e QR codes;
+6. gerar XLSX/PDF profissionais em vez de CSV/impressão do navegador;
+7. MFA para funções privilegiadas e revisão de segurança antes de sair do piloto.

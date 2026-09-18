@@ -2,11 +2,15 @@ import { useMemo, useState } from 'react';
 import { ArrowRight, CalendarRange, FolderPlus, MapPin, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
+import { useAuth } from '../contexts/AuthContext';
+import { canEditProjects } from '../utils/permissions';
 import { calculateTotals } from '../utils/calculations';
 import { formatDateTime, validateProjectChronology } from '../utils/dates';
 
 export function DashboardPage() {
   const data = useData();
+  const auth = useAuth();
+  const editable = canEditProjects(auth.profile);
   const [name, setName] = useState('');
   const [client, setClient] = useState('');
   const [creating, setCreating] = useState(false);
@@ -28,7 +32,7 @@ export function DashboardPage() {
           <h2>{data.currentProject ? 'Continue a pré-produção' : 'Comece por um projeto'}</h2>
           <p>{data.currentProject ? 'As áreas técnicas, cálculos e documentos nascem do mesmo conjunto de dados.' : 'Crie o evento e depois avance apenas pelas áreas que realmente serão utilizadas.'}</p>
         </div>
-        <button type="button" className="button primary" onClick={() => setCreating((v) => !v)}><FolderPlus size={18} /> Novo projeto</button>
+        {editable && <button type="button" className="button primary" onClick={() => setCreating((v) => !v)}><FolderPlus size={18} /> Novo projeto</button>}
       </section>
 
       {creating && (
@@ -77,12 +81,12 @@ export function DashboardPage() {
       {data.currentProject && (
         <section className="module-grid">
           {[
-            ['/audio', 'Áudio', 'PA, subs, delays, consoles e sinais'],
-            ['/iluminacao', 'Iluminação', 'Varas, solo, DMX, energia e rigging'],
+            ['/audio', 'Áudio', 'Mesa, caixas, subs, peso e consumo'],
+            ['/iluminacao', 'Iluminação', 'Aparelhos associados às estruturas compartilhadas'],
             ['/video', 'Vídeo', 'Painéis, processamento, pixels e montagem'],
             ['/estrutura', 'Estrutura', 'Consolidação de cargas aéreas e de solo'],
             ['/eletrica', 'Elétrica', 'Demanda consolidada e premissas'],
-            ['/dossie', 'Dossiê', 'Prévia técnica e documento final'],
+            ['/dossie', 'Dossiê', 'Descritivo + memoriais aéreo e de solo'],
           ].map(([to, title, description]) => (
             <Link key={to} to={to} className="module-card"><span className="module-index">{title}</span><strong>{description}</strong><span className="module-go">Abrir <ArrowRight size={15} /></span></Link>
           ))}

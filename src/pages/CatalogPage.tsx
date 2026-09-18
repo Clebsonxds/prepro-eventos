@@ -1,74 +1,17 @@
 import { useMemo, useState } from 'react';
-import { Archive, Plus, Search } from 'lucide-react';
+import { Archive, CheckCircle2, Plus, Search, Save, Wrench } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { EquipmentCategory } from '../types/domain';
+import { canManageCatalog } from '../utils/permissions';
+import type { Equipment, EquipmentCategory, PanelType } from '../types/domain';
 
-const categories: { value: EquipmentCategory; label: string }[] = [
-  ['audio_console','Mesa de áudio'],['audio_box','Caixa / PA'],['audio_stagebox','Stagebox / expansão'],
-  ['lighting_fixture','Aparelho de luz'],['lighting_console','Mesa de luz'],['video_panel','Painel de LED'],
-  ['video_processor','Processadora de vídeo'],['structure','Estrutura'],['power','Elétrica'],['other','Outro'],
-].map(([value,label]) => ({ value: value as EquipmentCategory, label: label as string }));
+const categories:[EquipmentCategory,string][]=[['audio_console','Mesa de som'],['audio_box','Caixa / PA'],['audio_stagebox','Stagebox'],['lighting_fixture','Aparelho de luz'],['lighting_console','Mesa de luz'],['video_panel','Painel de LED'],['video_processor','Processadora'],['structure','Estrutura'],['power','Elétrica'],['other','Outros']];
 
-export function CatalogPage() {
-  const data = useData();
-  const auth = useAuth();
-  const canEdit = auth.profile?.role === 'admin';
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<'all' | EquipmentCategory>('all');
-  const [showForm, setShowForm] = useState(false);
-  const filtered = useMemo(() => data.catalog.filter((eq) => {
-    const matchesCategory = category === 'all' || eq.category === category;
-    const q = query.trim().toLowerCase();
-    return matchesCategory && (!q || `${eq.name} ${eq.manufacturer} ${eq.model}`.toLowerCase().includes(q));
-  }), [data.catalog, query, category]);
+export function CatalogPage(){const data=useData();const auth=useAuth();const canManage=canManageCatalog(auth.profile);const [query,setQuery]=useState('');const [category,setCategory]=useState('all');const [creating,setCreating]=useState(false);const filtered=useMemo(()=>data.catalog.filter(e=>(category==='all'||e.category===category)&&`${e.name} ${e.manufacturer} ${e.model}`.toLowerCase().includes(query.toLowerCase())),[data.catalog,query,category]);return <div className="stack-lg"><section className="hero-panel compact"><div><span className="eyebrow">Catálogo + inventário</span><h2>Fonte única dos equipamentos</h2><p>A base antiga entrou como referência <strong>pendente de homologação</strong>. Ajuste o inventário real e arquive o que não pertence à empresa.</p></div>{canManage&&<button className="button primary" type="button" onClick={()=>setCreating(v=>!v)}><Plus size={17}/> Novo produto</button>}</section>
+  {creating&&<EquipmentForm onDone={()=>setCreating(false)}/>}<section className="panel"><div className="catalog-toolbar"><label className="search-field"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar aparelho, marca ou modelo"/></label><select value={category} onChange={e=>setCategory(e.target.value)}><option value="all">Todas as categorias</option>{categories.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div><div className="inventory-summary"><span>{filtered.length} itens exibidos</span><span>{data.catalog.filter(e=>e.verification_status==='verified').length} homologados</span><span>{data.catalog.filter(e=>e.maintenance_qty>0).length} com manutenção</span></div><div className="catalog-list">{filtered.map(eq=><CatalogRow key={eq.id} eq={eq} editable={canManage}/>)}</div></section>
+</div>}
 
-  return <div className="stack-lg">
-    <section className="hero-panel compact"><div><span className="eyebrow">Catálogo técnico</span><h2>Fonte única dos equipamentos</h2><p>Peso, potência e demais parâmetros devem existir aqui uma vez e alimentar todo o sistema.</p></div>{canEdit && <button className="button primary" type="button" onClick={() => setShowForm((v) => !v)}><Plus size={17} /> Novo equipamento</button>}</section>
-    {showForm && canEdit && <EquipmentForm onDone={() => setShowForm(false)} />}
-    <section className="panel">
-      <div className="catalog-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar equipamento…" /></label><select value={category} onChange={(e) => setCategory(e.target.value as 'all' | EquipmentCategory)}><option value="all">Todas as categorias</option>{categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
-      <div className="catalog-list">
-        {filtered.length === 0 ? <div className="empty-small">Nenhum equipamento encontrado.</div> : filtered.map((eq) => <div className="catalog-row" key={eq.id}>
-          <div><strong>{eq.name}</strong><span>{eq.manufacturer} {eq.model}</span></div>
-          <div className="catalog-specs"><span>{eq.weight_kg} kg</span><span>{eq.power_w} W</span>{eq.dmx_channels > 0 && <span>{eq.dmx_channels} DMX</span>}</div>
-          {canEdit ? <button className="icon-button danger" type="button" title="Arquivar" onClick={() => { if (confirm(`Arquivar ${eq.name}?`)) void data.archiveEquipment(eq.id); }}><Archive size={16} /></button> : <span></span>}
-        </div>)}
-      </div>
-    </section>
-  </div>;
-}
+function CatalogRow({eq,editable}:{eq:Equipment;editable:boolean}){const data=useData();const [stock,setStock]=useState(String(eq.stock_total));const [maint,setMaint]=useState(String(eq.maintenance_qty));const [saved,setSaved]=useState(false);async function save(){const stockN=Math.max(0,Number(stock||0));const maintN=Math.max(0,Math.min(stockN,Number(maint||0)));await data.updateEquipment(eq.id,{stock_total:stockN,maintenance_qty:maintN});setMaint(String(maintN));setSaved(true);setTimeout(()=>setSaved(false),1000);}return <div className="catalog-row inventory"><div><strong>{eq.name}</strong><span>{eq.manufacturer} {eq.model}</span><div className="catalog-tags"><span className={`verify-tag ${eq.verification_status}`}>{eq.verification_status==='verified'?'HOMOLOGADO':'PENDENTE'}</span>{eq.panel_type&&<span>{eq.panel_type}</span>}{eq.pitch_mm&&<span>P{eq.pitch_mm}</span>}</div></div><div className="catalog-specs"><span>{eq.weight_kg} kg</span><span>{eq.power_w} W</span>{eq.kg_per_m!=null&&<span>{eq.kg_per_m} kg/m</span>}{eq.output_ports!=null&&<span>{eq.output_ports} portas</span>}</div><div className="inventory-fields"><label>Estoque<input disabled={!editable} type="number" min="0" value={stock} onFocus={e=>e.currentTarget.select()} onChange={e=>setStock(e.target.value)}/></label><label><Wrench size={13}/> Manutenção<input disabled={!editable} type="number" min="0" value={maint} onFocus={e=>e.currentTarget.select()} onChange={e=>setMaint(e.target.value)}/></label><strong>{Math.max(0,Number(stock||0)-Number(maint||0))} livres*</strong></div>{editable&&<div className="catalog-actions"><button className="icon-button" title="Salvar estoque" type="button" onClick={()=>void save()}><Save size={16}/></button><button className="icon-button" title="Homologar" type="button" onClick={()=>void data.updateEquipment(eq.id,{verification_status:'verified'})}><CheckCircle2 size={16}/></button><button className="icon-button danger" title="Arquivar" type="button" onClick={()=>void data.archiveEquipment(eq.id)}><Archive size={16}/></button>{saved&&<small>salvo</small>}</div>}</div>}
 
-function EquipmentForm({ onDone }: { onDone(): void }) {
-  const data = useData();
-  const [form, setForm] = useState({ name:'', category:'other' as EquipmentCategory, manufacturer:'', model:'', weight_kg:'0', power_w:'0', dmx_channels:'0', audio_inputs:'0', case_capacity:'1', module_width_m:'', module_height_m:'', pixels_w:'', pixels_h:'', notes:'' });
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    await data.createEquipment({
-      name: form.name, category: form.category, manufacturer: form.manufacturer, model: form.model,
-      weight_kg: Number(form.weight_kg), power_w: Number(form.power_w), dmx_channels: Number(form.dmx_channels), audio_inputs: Number(form.audio_inputs), case_capacity: Number(form.case_capacity),
-      module_width_m: form.module_width_m ? Number(form.module_width_m) : null, module_height_m: form.module_height_m ? Number(form.module_height_m) : null,
-      pixels_w: form.pixels_w ? Number(form.pixels_w) : null, pixels_h: form.pixels_h ? Number(form.pixels_h) : null, notes: form.notes,
-    });
-    onDone();
-  }
-  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((prev) => ({ ...prev, [key]: value }));
-  const isPanel = form.category === 'video_panel';
-  return <form className="panel stack-md" onSubmit={submit}>
-    <div className="section-heading"><div><span className="eyebrow">Cadastro</span><h3>Novo equipamento</h3></div></div>
-    <div className="form-grid four">
-      <label className="span-2">Nome<input required value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome usado pelos produtores" /></label>
-      <label>Categoria<select value={form.category} onChange={(e) => set('category', e.target.value as EquipmentCategory)}>{categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</select></label>
-      <label>Fabricante<input value={form.manufacturer} onChange={(e) => set('manufacturer', e.target.value)} /></label>
-      <label>Modelo<input value={form.model} onChange={(e) => set('model', e.target.value)} /></label>
-      <label>Peso unitário (kg)<input type="number" min="0" step="0.01" value={form.weight_kg} onChange={(e) => set('weight_kg', e.target.value)} /></label>
-      <label>Potência unitária (W)<input type="number" min="0" step="1" value={form.power_w} onChange={(e) => set('power_w', e.target.value)} /></label>
-      <label>Canais DMX<input type="number" min="0" value={form.dmx_channels} onChange={(e) => set('dmx_channels', e.target.value)} /></label>
-      <label>Entradas de áudio<input type="number" min="0" value={form.audio_inputs} onChange={(e) => set('audio_inputs', e.target.value)} /></label>
-      <label>Unid. por case<input type="number" min="1" value={form.case_capacity} onChange={(e) => set('case_capacity', e.target.value)} /></label>
-      {isPanel && <><label>Largura módulo (m)<input type="number" min="0" step="0.01" value={form.module_width_m} onChange={(e) => set('module_width_m', e.target.value)} /></label><label>Altura módulo (m)<input type="number" min="0" step="0.01" value={form.module_height_m} onChange={(e) => set('module_height_m', e.target.value)} /></label><label>Pixels largura<input type="number" min="0" value={form.pixels_w} onChange={(e) => set('pixels_w', e.target.value)} /></label><label>Pixels altura<input type="number" min="0" value={form.pixels_h} onChange={(e) => set('pixels_h', e.target.value)} /></label></>}
-      <label className="span-4">Observações<textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} /></label>
-    </div>
-    <div className="form-actions end"><button className="button secondary" type="button" onClick={onDone}>Cancelar</button><button className="button primary" type="submit">Salvar equipamento</button></div>
-  </form>;
-}
+function EquipmentForm({onDone}:{onDone():void}){const data=useData();const [form,setForm]=useState({name:'',category:'other' as EquipmentCategory,manufacturer:'',model:'',weight_kg:'',power_w:'',max_power_w:'',stock_total:'0',maintenance_qty:'0',case_capacity:'1',module_width_m:'',module_height_m:'',pixels_w:'',pixels_h:'',pitch_mm:'',panel_type:'flat' as PanelType,output_ports:'',max_pixels:'',kg_per_m:'',notes:''});const set=<K extends keyof typeof form>(k:K,v:(typeof form)[K])=>setForm(p=>({...p,[k]:v}));const panel=form.category==='video_panel',processor=form.category==='video_processor',structure=form.category==='structure';async function submit(e:React.FormEvent){e.preventDefault();await data.createEquipment({name:form.name,category:form.category,manufacturer:form.manufacturer,model:form.model,weight_kg:Number(form.weight_kg||0),power_w:Number(form.power_w||0),max_power_w:Number(form.max_power_w||form.power_w||0),stock_total:Number(form.stock_total||0),maintenance_qty:Number(form.maintenance_qty||0),case_capacity:Number(form.case_capacity||1),module_width_m:form.module_width_m?Number(form.module_width_m):null,module_height_m:form.module_height_m?Number(form.module_height_m):null,pixels_w:form.pixels_w?Number(form.pixels_w):null,pixels_h:form.pixels_h?Number(form.pixels_h):null,pitch_mm:form.pitch_mm?Number(form.pitch_mm):null,panel_type:panel?form.panel_type:null,output_ports:form.output_ports?Number(form.output_ports):null,max_pixels:form.max_pixels?Number(form.max_pixels):null,kg_per_m:form.kg_per_m?Number(form.kg_per_m):null,verification_status:'pending',notes:form.notes});onDone();}
+  return <form className="panel stack-md" onSubmit={submit}><div className="section-heading"><div><span className="eyebrow">Cadastro</span><h3>Novo produto</h3></div></div><div className="form-grid four"><label className="span-2">Nome<input required value={form.name} onChange={e=>set('name',e.target.value)} placeholder="Nome usado pela equipe"/></label><label>Categoria<select value={form.category} onChange={e=>set('category',e.target.value as EquipmentCategory)}>{categories.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><label>Marca<input value={form.manufacturer} onChange={e=>set('manufacturer',e.target.value)}/></label><label>Modelo<input value={form.model} onChange={e=>set('model',e.target.value)}/></label><label>Peso unit. (kg)<input type="number" min="0" step="0.01" value={form.weight_kg} onFocus={e=>e.currentTarget.select()} onChange={e=>set('weight_kg',e.target.value)}/></label><label>Consumo típico (W)<input type="number" min="0" value={form.power_w} onFocus={e=>e.currentTarget.select()} onChange={e=>set('power_w',e.target.value)}/></label><label>Potência máxima (W)<input type="number" min="0" value={form.max_power_w} onFocus={e=>e.currentTarget.select()} onChange={e=>set('max_power_w',e.target.value)}/></label><label>Estoque total<input type="number" min="0" value={form.stock_total} onFocus={e=>e.currentTarget.select()} onChange={e=>set('stock_total',e.target.value)}/></label><label>Em manutenção<input type="number" min="0" value={form.maintenance_qty} onFocus={e=>e.currentTarget.select()} onChange={e=>set('maintenance_qty',e.target.value)}/></label><label>Unid. por case<input type="number" min="1" value={form.case_capacity} onChange={e=>set('case_capacity',e.target.value)}/></label>{panel&&<><label>Tipo<select value={form.panel_type} onChange={e=>set('panel_type',e.target.value as PanelType)}><option value="flat">Reto</option><option value="curved">Curvo</option><option value="flexible">Flexível</option><option value="other">Outro</option></select></label><label>Pitch (mm)<input type="number" min="0" step="0.001" value={form.pitch_mm} onChange={e=>set('pitch_mm',e.target.value)}/></label><label>Largura placa (m)<input type="number" min="0" step="0.01" value={form.module_width_m} onChange={e=>set('module_width_m',e.target.value)}/></label><label>Altura placa (m)<input type="number" min="0" step="0.01" value={form.module_height_m} onChange={e=>set('module_height_m',e.target.value)}/></label><label>Pixels largura<input type="number" min="0" value={form.pixels_w} onChange={e=>set('pixels_w',e.target.value)}/></label><label>Pixels altura<input type="number" min="0" value={form.pixels_h} onChange={e=>set('pixels_h',e.target.value)}/></label></>}{processor&&<><label>Portas de saída<input type="number" min="0" value={form.output_ports} onChange={e=>set('output_ports',e.target.value)}/></label><label>Capacidade pixels<input type="number" min="0" value={form.max_pixels} onChange={e=>set('max_pixels',e.target.value)}/></label></>}{structure&&<label>Peso linear (kg/m)<input type="number" min="0" step="0.1" value={form.kg_per_m} onChange={e=>set('kg_per_m',e.target.value)}/></label>}<label className="span-4">Observações<textarea value={form.notes} onChange={e=>set('notes',e.target.value)}/></label></div><div className="form-actions end"><button className="button secondary" type="button" onClick={onDone}>Cancelar</button><button className="button primary" type="submit">Salvar produto</button></div></form>}

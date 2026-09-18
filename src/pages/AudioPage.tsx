@@ -1,4 +1,12 @@
-import { GroupAreaPage } from '../components/GroupAreaPage';
-export function AudioPage() {
-  return <GroupAreaPage area="audio" eyebrow="Áudio" title="Sistema de sonorização" description="Organize PA, subs, delays, monitores e infraestrutura por posição de instalação." groupExamples="Ex.: PA principal L, Subs, Delay 01" allowedCategories={['audio_console','audio_box','audio_stagebox','other']} />;
-}
+import { useEffect, useMemo, useState } from 'react';
+import { Save } from 'lucide-react';
+import { ProjectRequired } from '../components/ProjectRequired';
+import { EquipmentPlacementTable } from '../components/EquipmentPlacementTable';
+import { useData } from '../contexts/DataContext';
+import { useAuth } from '../contexts/AuthContext';
+import { canEditProjects } from '../utils/permissions';
+import { equipmentForItem, itemPowerW } from '../utils/calculations';
+
+export function AudioPage(){const data=useData();const auth=useAuth();const editable=canEditProjects(auth.profile);const consoles=useMemo(()=>data.catalog.filter(e=>e.category==='audio_console'),[data.catalog]);const consoleItem=data.items.find(i=>i.area==='audio'&&equipmentForItem(i,data.catalog)?.category==='audio_console');const [consoleId,setConsoleId]=useState(consoleItem?.equipment_id??'');const [saved,setSaved]=useState(false);useEffect(()=>setConsoleId(consoleItem?.equipment_id??''),[consoleItem?.id]);const totalPower=data.items.filter(i=>i.area==='audio').reduce((s,i)=>s+itemPowerW(i,equipmentForItem(i,data.catalog)),0);
+  async function saveConsole(){if(!editable)return;if(consoleItem)await data.deleteItem(consoleItem.id);if(consoleId)await data.createItem({area:'audio',group_id:null,equipment_id:consoleId,quantity:1,position_name:'FOH / mesa'});setSaved(true);setTimeout(()=>setSaved(false),1200);}
+  return <ProjectRequired><div className="stack-lg"><section className="hero-panel compact"><div><span className="eyebrow">Áudio</span><h2>Som direto ao ponto</h2><p>Para o descritivo importam a mesa, os aparelhos, onde serão instalados, peso e consumo.</p></div></section><section className="panel"><div className="section-heading"><div><span className="eyebrow">Mesa</span><h3>Console principal</h3></div></div><div className="simple-save-row"><select disabled={!editable} value={consoleId} onChange={e=>setConsoleId(e.target.value)}><option value="">Nenhuma / definir depois</option>{consoles.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>{editable&&<button className="button primary" type="button" onClick={()=>void saveConsole()}><Save size={16}/>{saved?'Salvo':'Salvar mesa'}</button>}</div></section><section className="panel"><div className="section-heading"><div><span className="eyebrow">Aparelhos</span><h3>Caixas, subs e acessórios</h3></div><strong>{(totalPower/1000).toLocaleString('pt-BR',{maximumFractionDigits:2})} kW</strong></div><EquipmentPlacementTable area="audio" categories={['audio_box','audio_stagebox','other']} editable={editable}/></section><div className="technical-note strong">Para equipamentos aéreos, selecione uma estrutura compartilhada criada em <strong>Estrutura</strong>. A mesma trave pode receber Som e Iluminação, e a carga será consolidada em um único total.</div></div></ProjectRequired>}

@@ -2,90 +2,69 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Profile } from '../types/domain';
 import { hasSupabaseConfig, isDemoMode, supabase } from '../lib/supabase';
+import { validatePassword } from '../utils/password';
 
 interface AuthContextValue {
-  ready: boolean;
-  authenticated: boolean;
-  profile: Profile | null;
-  demo: boolean;
-  configured: boolean;
-  signIn(email: string, password: string): Promise<void>;
-  signOut(): Promise<void>;
+  ready:boolean;
+  authenticated:boolean;
+  approved:boolean;
+  profile:Profile|null;
+  demo:boolean;
+  configured:boolean;
+  signIn(email:string,password:string):Promise<void>;
+  signUp(fullName:string,email:string,password:string):Promise<void>;
+  signOut():Promise<void>;
 }
+const AuthContext=createContext<AuthContextValue|null>(null);
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+export function AuthProvider({children}:{children:ReactNode}){
+  const [ready,setReady]=useState(false);
+  const [profile,setProfile]=useState<Profile|null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(false);
-  const [profile, setProfile] = useState<Profile | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    if (isDemoMode) {
-      setProfile({ id: 'demo-admin', full_name: 'Usuário de demonstração', role: 'admin' });
-      setReady(true);
-      return;
+  useEffect(()=>{
+    let mounted=true;
+    if(isDemoMode){
+      setProfile({id:'demo-admin',full_name:'Administrador de demonstração',email:'admin@demo.local',role:'admin',approval_status:'approved'});
+      setReady(true); return;
     }
+    if(!supabase){setReady(true);return;}
 
-    if (!supabase) {
-      setReady(true);
-      return;
-    }
-
-    async function loadProfile(userId: string | null) {
-      if (!mounted) return;
-      if (!userId) {
-        setProfile(null);
-        setReady(true);
-        return;
-      }
-      const { data, error } = await supabase!.from('profiles').select('id, full_name, role').eq('id', userId).single();
-      if (!mounted) return;
-      if (error) {
-        setProfile(null);
-      } else {
-        setProfile(data as Profile);
-      }
+    async function loadProfile(userId:string|null,email=''){
+      if(!mounted)return;
+      if(!userId){setProfile(null);setReady(true);return;}
+      const {data,error}=await supabase!.from('profiles').select('id,full_name,email,role,approval_status').eq('id',userId).single();
+      if(!mounted)return;
+      if(error) setProfile({id:userId,full_name:email.split('@')[0]||'Usuário',email,role:'viewer',approval_status:'pending'});
+      else setProfile(data as Profile);
       setReady(true);
     }
+    void supabase.auth.getSession().then(({data})=>loadProfile(data.session?.user.id??null,data.session?.user.email??''));
+    const {data:listener}=supabase.auth.onAuthStateChange((_event,session)=>{void loadProfile(session?.user.id??null,session?.user.email??'');});
+    return()=>{mounted=false;listener.subscription.unsubscribe();};
+  },[]);
 
-    void supabase.auth.getSession().then(({ data }) => loadProfile(data.session?.user.id ?? null));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      void loadProfile(session?.user.id ?? null);
-    });
-
-    return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
-  const value = useMemo<AuthContextValue>(() => ({
+  const value=useMemo<AuthContextValue>(()=>({
     ready,
-    authenticated: Boolean(profile),
+    authenticated:Boolean(profile),
+    approved:profile?.approval_status==='approved',
     profile,
-    demo: isDemoMode,
-    configured: isDemoMode || hasSupabaseConfig,
-    async signIn(email, password) {
-      if (isDemoMode) return;
-      if (!supabase) throw new Error('O Supabase ainda não foi configurado.');
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
+    demo:isDemoMode,
+    configured:isDemoMode||hasSupabaseConfig,
+    async signIn(email,password){
+      if(isDemoMode)return;
+      if(!supabase)throw new Error('O Supabase ainda não foi configurado.');
+      const {error}=await supabase.auth.signInWithPassword({email,password});
+      if(error)throw new Error(error.message);
     },
-    async signOut() {
-      if (isDemoMode) return;
-      if (!supabase) return;
-      const { error } = await supabase.auth.signOut();
-      if (error) throw new Error(error.message);
+    async signUp(fullName,email,password){
+      if(isDemoMode)throw new Error('Cadastro real fica desativado no modo DEMO.');
+      if(!supabase)throw new Error('O Supabase ainda não foi configurado.');
+      const issues=validatePassword(password); if(issues.length)throw new Error(issues.join(' '));
+      const {error}=await supabase.auth.signUp({email,password,options:{data:{full_name:fullName.trim()}}});
+      if(error)throw new Error(error.message);
     },
-  }), [profile, ready]);
-
+    async signOut(){if(isDemoMode)return;if(supabase)await supabase.auth.signOut();setProfile(null);},
+  }),[ready,profile]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
-export function useAuth() {
-  const value = useContext(AuthContext);
-  if (!value) throw new Error('useAuth deve ser usado dentro de AuthProvider.');
-  return value;
-}
+export function useAuth(){const v=useContext(AuthContext);if(!v)throw new Error('useAuth fora do provider');return v;}
