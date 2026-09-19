@@ -16,6 +16,7 @@ export function DossierPage() {
   const data = useData();
   const project = data.currentProject;
   if (!project) return <ProjectRequired><></></ProjectRequired>;
+  const activeProject = project;
 
   const totals = calculateTotals(data.groups, data.items, data.catalog);
   const structures = data.groups.filter((g) => g.area === 'structure');
@@ -31,7 +32,7 @@ export function DossierPage() {
   }
 
   function aerialRows() {
-    const rows: (string | number)[][] = [['MEMORIAL DE CÁLCULO AÉREO'], ['Projeto', project.name], ['Local', project.venue], []];
+    const rows: (string | number)[][] = [['MEMORIAL DE CÁLCULO AÉREO'], ['Projeto', activeProject.name], ['Local', activeProject.venue], []];
     for (const g of aerial) {
       const assigned = data.items.filter((i) => i.group_id === g.id);
       const own = groupOwnWeightKg(g);
@@ -58,7 +59,7 @@ export function DossierPage() {
   }
 
   function floorRows() {
-    const rows: (string | number)[][] = [['MEMORIAL DE CÁLCULO DE SOLO'], ['Projeto', project.name], ['Local', project.venue], []];
+    const rows: (string | number)[][] = [['MEMORIAL DE CÁLCULO DE SOLO'], ['Projeto', activeProject.name], ['Local', activeProject.venue], []];
 
     for (const g of floorStructures) {
       const assigned = data.items.filter((i) => i.group_id === g.id);

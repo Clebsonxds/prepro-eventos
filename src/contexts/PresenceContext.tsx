@@ -11,11 +11,12 @@ export function PresenceProvider({children}:{children:ReactNode}){const auth=use
   useEffect(()=>{
     if(!auth.profile)return;
     if(isDemoMode){setEntries([{user_id:auth.profile.id,full_name:auth.profile.full_name,role:auth.profile.role,project_id:data.currentProject?.id??null,project_name:data.currentProject?.name??null,route:location.pathname,online_at:new Date().toISOString()}]);return;}
-    if(!supabase)return;
-    const channel=supabase.channel('prepro-presence',{config:{presence:{key:auth.profile.id}}});
+    const client = supabase;
+    if(!client)return;
+    const channel=client.channel('prepro-presence',{config:{presence:{key:auth.profile.id}}});
     channel.on('presence',{event:'sync'},()=>{const state=channel.presenceState();const rows:PresenceEntry[]=[];Object.values(state).flat().forEach(raw=>{const p=raw as unknown as PresenceEntry;if(p.user_id)rows.push(p)});setEntries(rows);});
     void channel.subscribe(async status=>{if(status==='SUBSCRIBED')await channel.track({user_id:auth.profile!.id,full_name:auth.profile!.full_name,role:auth.profile!.role,project_id:data.currentProject?.id??null,project_name:data.currentProject?.name??null,route:location.pathname,online_at:new Date().toISOString()});});
-    return()=>{void supabase.removeChannel(channel)};
+    return()=>{void client.removeChannel(channel)};
   },[auth.profile?.id,data.currentProject?.id,location.pathname]);
   const value=useMemo(()=>entries,[entries]);return <PresenceContext.Provider value={value}>{children}</PresenceContext.Provider>;
 }
