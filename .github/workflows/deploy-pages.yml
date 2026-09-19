@@ -1,44 +1,57 @@
 name: Deploy GitHub Pages
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: pages
   cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Baixar projeto
         uses: actions/checkout@v4
+
       - name: Preparar Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - name: Instalar dependências
         run: npm install
+
       - name: Gerar aplicação
         run: npm run build
         env:
           VITE_APP_NAME: "PrePro Eventos"
           VITE_DEMO_MODE: "true"
+
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
+
       - name: Preparar arquivos para publicação
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Publicar site
         id: deployment
